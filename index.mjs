@@ -21,9 +21,9 @@ export const handler = async (event, context) => {
 
 
         await downloadFile(messageObject);
-        await uploadFile( messageObject);
-        await sendMail(messageObject);
-        await putItem(messageObject);
+        var url =await uploadFile( messageObject);
+        var status = await sendMail(messageObject, "SUCCESS", url);
+        await putItem(messageObject,status);
 
         console.log("End of handler function");
         return context.logStreamName;
@@ -58,14 +58,17 @@ async function uploadFile(messageObject) {
         await storage.bucket(bucketName).upload(filePath, {
             destination: destinationPath,
         });
+
         console.log(`File ${filePath} uploaded to ${bucketName}/${destinationPath}`);
+        return destinationPath;
     } catch (error) {
         console.error('Error uploading file:', error);
         throw error;
     }
 }
 
-async function putItem(messageObject) {
+async function putItem(messageObject,status) {
+
     const client = new DynamoDBClient({});
     const dynamo = DynamoDBDocumentClient.from(client);
 
@@ -81,7 +84,7 @@ async function putItem(messageObject) {
                     submission_url: messageObject.submissionUrl,
                     email_id: messageObject.emailId,
                     timestamp: Date.now(),
-                    mail_status: "SUCCESS"
+                    mail_status: status
                 },
             })
         );
@@ -97,53 +100,78 @@ async function downloadFile(messageObject) {
     await new Promise((resolve, reject) => {
         const file = fs.createWriteStream(destinationPath);
 
-        https.get(url, response => {
+        https.get(url, async response => {
             if (response.statusCode === 200) {
                 response.pipe(file);
 
                 file.on('finish', () => {
-                    file.close(() => {
+                    file.close(async () => {
                         console.log(`Download completed: ${destinationPath}`);
+                        const stats = fs.statSync(destinationPath);
+                        const fileSizeInBytes = stats.size;
+                        if (fileSizeInBytes === 0) {
+                            console.error("File size is 0");
+                            await sendMail(messageObject, "EMPTY_FILE")
+                            reject(new Error("File size is 0"));
+                        }
                         resolve(); // Resolve the promise to signal completion
                     });
                 });
-            }else if(response.statusCode === 302){
+            } else if (response.statusCode === 302) {
                 console.log("Redirecting to: " + response.headers.location);
-                https.get(response.headers.location, response2 => {
+                https.get(response.headers.location, async response2 => {
                     if (response2.statusCode === 200) {
                         response2.pipe(file);
-
                         file.on('finish', () => {
                             file.close(() => {
                                 console.log(`Download completed: ${destinationPath}`);
+                                const stats = fs.statSync(destinationPath);
+                                const fileSizeInBytes = stats.size;
+                                if (fileSizeInBytes === 0) {
+                                    console.error("File size is 0");
+                                    sendMail(messageObject, "EMPTY_FILE")
+                                    reject(new Error("File size is 0"));
+                                }
                                 resolve(); // Resolve the promise to signal completion
                             });
                         });
-                    }else{
+                    } else {
                         console.error(`Failed to download file. Status code: ${response2.statusCode}`);
+                        await sendMail(messageObject, "FAILED")
                         reject(new Error(`Failed to download file. Status code: ${response2.statusCode}`));
                     }
-                }).on('error', error => {
+                }).on('error', async error => {
                     console.error(`Error during download: ${error.message}`);
+                    await sendMail(messageObject, "FAILED")
                     reject(error);
                 });
             } else {
                 console.error(`Failed to download file. Status code: ${response.statusCode}`);
+                await sendMail(messageObject, "FAILED")
+
                 reject(new Error(`Failed to download file. Status code: ${response.statusCode}`));
             }
-        }).on('error', error => {
+        }).on('error', async error => {
             console.error(`Error during download: ${error.message}`);
+            await sendMail(messageObject, "FAILED")
+
             reject(error);
         });
     });
 }
 
-async function sendMail(messageObject) {
+async function sendMail(messageObject,status,url) {
     var  apiKey = process.env.SG_API_KEY;
     var templateId = process.env.TEMPLATE_ID;
+    var templateIdFailed = process.env.TEMPLATE_ID_FAILED;
+    var templateIdEmptyFile = process.env.TEMPLATE_ID_EMPTY_FILE;
     sgMail.setApiKey(apiKey);
 
-
+    if(status === "EMPTY_FILE"){
+        templateId = templateIdEmptyFile;
+    }else if(status === "FAILED"){
+        templateId = templateIdFailed;
+    }
     const msg = {
         to: messageObject.emailId,
         from:'contact@srikanthnandikonda.me',
@@ -152,7 +180,8 @@ async function sendMail(messageObject) {
             assignmentName: messageObject.assignmentName,
             submissionId: messageObject.submissionId,
             time: new Date().toLocaleString("en-US", {timeZone: "America/New_York"}),
-            userName: messageObject.firstName
+            userName: messageObject.firstName,
+            url : url
         },
         asm: {
             groupId: 35630,
@@ -166,11 +195,12 @@ async function sendMail(messageObject) {
         .send(msg)
         .then(() => {
             console.log(`Email sent to ${messageObject.emailId} for assignment ${messageObject.assignmentName}`);
+            return "SUCCESS"
         })
         .catch((error) => {
             console.log(`Failed to send email to ${messageObject.emailId} for assignment ${messageObject.assignmentName}`);
             console.error(error);
-            throw error;
+            return "FAILED"
         })
 
 
