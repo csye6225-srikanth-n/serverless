@@ -1,0 +1,27 @@
+{
+  "name": "serverless",
+  "version": "1.0.0",
+  "description": "Repo to store AWS lambda functionality",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nsrikanth97/serverless.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nsrikanth97/serverless/issues"
+  },
+  "homepage": "https://github.com/nsrikanth97/serverless#readme",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.458.0",
+    "@aws-sdk/lib-dynamodb": "^3.458.0",
+    "@google-cloud/storage": "^7.6.0",
+    "@sendgrid/mail": "^7.7.0",
+    "@smithy/types": "^2.6.0"
+  }
+}
