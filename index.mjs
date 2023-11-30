@@ -23,6 +23,7 @@ export const handler = async (event, context) => {
         await downloadFile(messageObject);
         var url =await uploadFile( messageObject);
         var status = await sendMail(messageObject, "SUCCESS", url);
+        console.log("Status of the mail: " + status)
         await putItem(messageObject,status);
 
         console.log("End of handler function");
@@ -191,7 +192,8 @@ async function sendMail(messageObject,status,url) {
         }
     }
 
-    sgMail
+
+    return await sgMail
         .send(msg)
         .then(() => {
             console.log(`Email sent to ${messageObject.emailId} for assignment ${messageObject.assignmentName}`);
