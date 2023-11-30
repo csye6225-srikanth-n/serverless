@@ -23,8 +23,8 @@ export const handler = async (event, context) => {
         await downloadFile(messageObject);
         var url =await uploadFile( messageObject);
         var status = await sendMail(messageObject, "SUCCESS", url);
+        console.log("Status of the mail: " + status)
         await putItem(messageObject,status);
-
         console.log("End of handler function");
         return context.logStreamName;
     } catch (error) {
@@ -68,7 +68,7 @@ async function uploadFile(messageObject) {
 }
 
 async function putItem(messageObject,status) {
-
+    console.log(`Start of putItem function with ${status}`);
     const client = new DynamoDBClient({});
     const dynamo = DynamoDBDocumentClient.from(client);
 
@@ -191,7 +191,7 @@ async function sendMail(messageObject,status,url) {
         }
     }
 
-    sgMail
+    return await sgMail
         .send(msg)
         .then(() => {
             console.log(`Email sent to ${messageObject.emailId} for assignment ${messageObject.assignmentName}`);
